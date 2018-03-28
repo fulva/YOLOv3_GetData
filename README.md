@@ -1,3 +1,5 @@
+##Main code is copy from https://github.com/pjreddie/darknet##
+
 ![Darknet Logo](http://pjreddie.com/media/files/darknet-black-small.png)
 
 #Darknet#
