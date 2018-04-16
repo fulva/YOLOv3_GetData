@@ -24,6 +24,7 @@ static char **demo_names;
 static image **demo_alphabet;
 static int demo_classes;
 
+static long int videotime;
 static float **probs;
 static box *boxes;
 static network *net;
@@ -36,6 +37,8 @@ static float fps = 0;
 static float demo_thresh = 0.24;
 static float demo_hier = .5;
 static int running = 0;
+static float begintime;
+
 
 static int demo_frame = 3;
 static int demo_detections = 0;
@@ -45,7 +48,7 @@ static int demo_done = 0;
 static float *avg;
 double demo_time;
 FILE *fp;
-
+FILE *videofp;
 //For write video
 static CvVideoWriter *DetectVideo = NULL;
 
@@ -54,7 +57,6 @@ save_boxes(int boxes_num)
     int i = 0, j, k, human_num = 0, color_num, class, left, right, top, bot;
     float prob, r, g, b;
     image display = buff[(buff_index+2) % 3];
-
 
     for(i=0; i< boxes_num; i++)
     {
@@ -189,6 +191,34 @@ void *human_save_detect_loop(void *ptr)
 
 void humansave(char *cfgfile, char *weightfile, float thresh, int cam_index, const char *filename, char **names, int classes, int delay, char *prefix, int avg_frames, float hier, int w, int h, int frames, int fullscreen)
 {
+
+    char *findtime = (char*)malloc(50);
+    findtime = strcpy(findtime, filename);
+
+    char *time;
+    time = strtok(findtime,"/");
+    time = strtok (NULL, "/");
+    sscanf(time, "%ld", &videotime);
+    begintime =(float)(videotime%100+((videotime/100)%100)*60+((videotime/10000)%100)*3600);
+    printf("    The time record the video:%f\n", begintime);
+
+    char *directory = (char*)malloc(50);
+    strcpy(directory, filename);
+    directory = strtok(directory,"/");
+    directory = strcat(directory,"/");
+    directory = strcat(directory,time);
+    directory = strcat(directory,"/");
+    printf("    The directory of video file:%s\n",directory);
+
+    char *videocsvfile = (char*)malloc(50);
+    videocsvfile = strcpy(videocsvfile, directory);
+    videocsvfile = strcat(videocsvfile, time);
+    videocsvfile = strcat(videocsvfile, ".csv");
+    printf("    The frame time recording file of video:%s\n",videocsvfile);
+
+
+
+
     demo_frame = avg_frames;
     predictions = calloc(demo_frame, sizeof(float*));
     image **alphabet = load_alphabet();
@@ -229,7 +259,17 @@ void humansave(char *cfgfile, char *weightfile, float thresh, int cam_index, con
     }
 
     if(!cap) error("Couldn't connect to webcam.\n");
-  
+ 
+    //----------------------For Reading CSV File--------------------------
+    videofp = NULL;
+
+    videofp = fopen(videocsvfile, "r");
+    if(videofp == NULL)
+    {
+        printf("The video csv file or box csv file cannot be read!\n");
+        exit(1);
+    }
+ 
     /*-------------------------For Writing CSV File------------------------*/
     fp = NULL;
     fp = fopen(CSVFile, "a");
@@ -276,6 +316,8 @@ void humansave(char *cfgfile, char *weightfile, float thresh, int cam_index, con
     demo_time = what_time_is_it_now();*/
 
     int count  = 0;
+    float frametime = 0;
+    int framenum = 0;
 
     /*----------------------For Recording Video file------------------*/
     DetectVideo = cvCreateVideoWriter("./data/PersonDete.avi", CV_FOURCC('P','I','M','1'),30.0,cvSize(buff[0].w,buff[0].h),1);
@@ -285,6 +327,8 @@ void humansave(char *cfgfile, char *weightfile, float thresh, int cam_index, con
     while(!demo_done){
 	++count;
 	fprintf(fp, "%d,",count);
+	fscanf(videofp, "%d, %f\n",&framenum, &frametime);
+	fprintf(fp, "%f,",frametime);
         printf("\n------------------Count: %d------------------\n",count);
         buff_index = (buff_index + 1) %3;
         if(pthread_create(&fetch_thread, 0, human_save_fetch_in_thread, 0)) error("Thread creation failed");
@@ -317,6 +361,7 @@ void humansave(char *cfgfile, char *weightfile, float thresh, int cam_index, con
     cvReleaseVideoWriter(&DetectVideo);
     //printf("Video Writer released\n");
     fclose(fp);
+    fclose(videofp);
     fp = NULL;
     //printf("humansave function closed\n");
 }
